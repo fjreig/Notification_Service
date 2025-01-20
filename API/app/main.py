@@ -1,8 +1,8 @@
 import uvicorn
 from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
-from pydantic import BaseModel
-from app.models import Notification
+
+from app.models import Notification, NotificationRequest
 from app.database import SessionLocal, init_db
 
 app = FastAPI()
@@ -18,11 +18,6 @@ def get_db():
     finally:
         db.close()
 
-# Pydantic model for request validation
-class NotificationRequest(BaseModel):
-    recipient: str
-    message: str
-
 @app.post("/notifications/")
 async def create_notification(notification_req: NotificationRequest, db: Session = Depends(get_db)):
     notification = Notification(
@@ -35,8 +30,8 @@ async def create_notification(notification_req: NotificationRequest, db: Session
     db.refresh(notification)
     return {"status": "Notification created", "notification_id": notification.id}
 
-@app.get("/notifications/{notification_id}")
-async def read_notification(notification_id: int, db: Session = Depends(get_db)):
+@app.get("/notifications/id/{notification_id}")
+async def read_notification_id(notification_id: int, db: Session = Depends(get_db)):
     notification = db.query(Notification).filter(Notification.id == notification_id).first()
     if notification is None:
         return {"error": "Notification not found"}
@@ -48,6 +43,38 @@ async def read_notification(notification_id: int, db: Session = Depends(get_db))
         "created_at": notification.created_at,
     }
 
+@app.get("/notifications/recipient/{notification_recipient}")
+async def read_notification_recipient(notification_recipient: str, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.recipient == notification_recipient).all()
+    if notification is None:
+        return {"error": "Notification not found"}
+    valores = []
+    for row in notification:
+        valores.append({
+        "id": row.id,
+        "recipient": row.recipient,
+        "message": row.message,
+        "status": row.status,
+        "created_at": row.created_at,
+        })
+    return valores
+
+@app.get("/notifications/status/{notification_status}")
+async def read_notification_status(notification_status: str, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.status == notification_status).all()
+    if notification is None:
+        return {"error": "Notification not found"}
+    valores = []
+    for row in notification:
+        valores.append({
+        "id": row.id,
+        "recipient": row.recipient,
+        "message": row.message,
+        "status": row.status,
+        "created_at": row.created_at,
+        })
+    return valores
+
 @app.put("/notifications/{notification_id}")
 async def update_notification_status(notification_id: int, status: str, db: Session = Depends(get_db)):
     notification = db.query(Notification).filter(Notification.id == notification_id).first()
@@ -55,5 +82,15 @@ async def update_notification_status(notification_id: int, status: str, db: Sess
         return {"error": "Notification not found"}
     
     notification.status = status
+    db.commit()
+    return {"status": "Notification updated", "notification_id": notification.id}
+
+@app.delete("/notifications/{notification_id}")
+async def delete_notification(notification_id: int, db: Session = Depends(get_db)):
+    notification = db.query(Notification).filter(Notification.id == notification_id).first()
+    db.delete(notification)
+    if notification is None:
+        return {"error": "Notification not found"}
+    
     db.commit()
     return {"status": "Notification updated", "notification_id": notification.id}
